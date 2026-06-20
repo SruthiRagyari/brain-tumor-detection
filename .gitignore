@@ -1,0 +1,18 @@
+# Model files (too large for GitHub)
+model/brain_tumor_classifier.h5
+model/brain_tumor_classifier.keras
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kaggle
+kaggle.json
+
+# Dataset (downloaded at runtime)
+dataset/
