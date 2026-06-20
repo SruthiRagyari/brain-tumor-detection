@@ -1,5 +1,4 @@
-# Model files (too large for GitHub)
-model/brain_tumor_classifier.h5
+# Keep only the .h5 model (smaller, needed for Streamlit)
 model/brain_tumor_classifier.keras
 
 # Python
