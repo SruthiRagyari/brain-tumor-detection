@@ -1,7 +1,7 @@
 import gradio as gr
 import numpy as np
 import cv2
-import tensorflow as tf
+import onnxruntime as ort
 from PIL import Image
 
 # ─────────────────────────────────────────────
@@ -16,91 +16,37 @@ CLASS_INFO = {
 }
 
 # ─────────────────────────────────────────────
-# Load Model
+# Load ONNX Model
 # ─────────────────────────────────────────────
-model = tf.keras.models.load_model("model/brain_tumor_classifier.h5")
-
-# Build Grad-CAM model
-_base = None
-for _layer in model.layers:
-    if isinstance(_layer, tf.keras.Model):
-        _base = _layer
-        break
-
-_last_conv = None
-for _layer in reversed(_base.layers):
-    if isinstance(_layer, tf.keras.layers.Conv2D):
-        _last_conv = _layer
-        break
-
-_inp = model.input
-_conv_output = _base.get_layer(_last_conv.name).output
-_base_grad = tf.keras.Model(inputs=_base.input, outputs=[_conv_output, _base.output])
-_conv_out, _base_out = _base_grad(_inp)
-
-_head_x = _base_out
-for _hlayer in model.layers:
-    if _hlayer == model.layers[0] or isinstance(_hlayer, tf.keras.Model):
-        continue
-    _head_x = _hlayer(_head_x)
-
-grad_cam_model = tf.keras.Model(inputs=_inp, outputs=[_conv_out, _head_x])
-print("Model and Grad-CAM loaded successfully!")
-
-# ─────────────────────────────────────────────
-# Grad-CAM Functions
-# ─────────────────────────────────────────────
-def generate_gradcam(img_array):
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_cam_model(tf.cast(img_array, tf.float32))
-        pred_index = tf.argmax(predictions[0])
-        class_channel = predictions[:, pred_index]
-    grads = tape.gradient(class_channel, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-    conv_outputs = conv_outputs[0]
-    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
-    heatmap = tf.squeeze(heatmap)
-    heatmap = tf.nn.relu(heatmap)
-    heatmap = heatmap / (tf.math.reduce_max(heatmap) + 1e-8)
-    return heatmap.numpy(), pred_index.numpy(), predictions.numpy()
-
-def create_overlay(img_array_224, heatmap, alpha=0.4):
-    img = np.uint8(img_array_224 * 255)
-    heatmap_resized = cv2.resize(heatmap, (224, 224))
-    heatmap_uint8 = np.uint8(255 * heatmap_resized)
-    heatmap_colored = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
-    heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
-    superimposed = cv2.addWeighted(img, 1 - alpha, heatmap_colored, alpha, 0)
-    return superimposed
+session = ort.InferenceSession("model/brain_tumor_classifier.onnx")
+input_name = session.get_inputs()[0].name
+output_name = session.get_outputs()[0].name
+print(f"ONNX model loaded! Input: {input_name}, Output: {output_name}")
 
 # ─────────────────────────────────────────────
 # Prediction Function
 # ─────────────────────────────────────────────
 def predict(image):
     if image is None:
-        return None, None, "Please upload an image."
+        return None, "Please upload an image."
 
     # Preprocess
     img = Image.fromarray(image).resize((224, 224))
-    img_array = np.array(img) / 255.0
+    img_array = np.array(img, dtype=np.float32) / 255.0
     img_batch = np.expand_dims(img_array, axis=0)
 
-    # Predict
-    predictions = model.predict(img_batch, verbose=0)
+    # Run ONNX inference
+    predictions = session.run([output_name], {input_name: img_batch})[0]
     pred_idx = np.argmax(predictions[0])
     pred_class = CLASS_NAMES[pred_idx]
 
     # Confidence dict for Gradio label
     confidences = {CLASS_NAMES[i]: float(predictions[0][i]) for i in range(4)}
 
-    # Grad-CAM
-    heatmap, _, _ = generate_gradcam(img_batch)
-    overlay = create_overlay(img_array, heatmap)
-
     # Info text
     info = f"### {pred_class}\n{CLASS_INFO[pred_class]}"
 
-    return confidences, overlay, info
+    return confidences, info
 
 # ─────────────────────────────────────────────
 # Gradio Interface
@@ -113,7 +59,7 @@ with gr.Blocks(
     title="Brain Tumor Classifier",
     css="""
     .main-header { text-align: center; margin-bottom: 0.5rem; }
-    .main-header h1 { 
+    .main-header h1 {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -153,32 +99,25 @@ with gr.Blocks(
             gr.Markdown("""
             **Supported classes:**
             - 🔴 Glioma
-            - 🔵 Meningioma  
+            - 🔵 Meningioma
             - 🟢 No Tumor
             - 🟡 Pituitary
             """)
 
         with gr.Column(scale=1):
             output_label = gr.Label(label="Classification Results", num_top_classes=4)
-            output_gradcam = gr.Image(label="Grad-CAM Visualization", height=300)
             output_info = gr.Markdown(label="Tumor Information")
 
     submit_btn.click(
         fn=predict,
         inputs=input_image,
-        outputs=[output_label, output_gradcam, output_info]
-    )
-
-    gr.Examples(
-        examples=[],
-        inputs=input_image,
-        label="Try an example (upload your own MRI scan above)"
+        outputs=[output_label, output_info]
     )
 
     gr.HTML("""
     <div class="disclaimer">
         ⚠️ <b>Disclaimer:</b> This tool is for educational purposes only. Not intended for clinical diagnosis.<br>
-        Built with EfficientNetB0 · TensorFlow · Gradio
+        Built with EfficientNetB0 · ONNX Runtime · Gradio
     </div>
     """)
 
