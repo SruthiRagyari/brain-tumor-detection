@@ -1,5 +1,5 @@
-streamlit
 tensorflow-cpu
+gradio
 numpy<2.0
 opencv-python-headless
 Pillow
