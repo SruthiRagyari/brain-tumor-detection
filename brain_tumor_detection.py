@@ -132,8 +132,10 @@ NUM_CLASSES = 4
 SEED = 42
 
 # %% --- Cell 11: Create Data Generators
+# Note: We do NOT use rescale=1./255 because EfficientNetB0 has a built-in
+# Rescaling layer that rescales [0, 255] inputs to [0, 1] internally.
+# Scaling it here would cause double-scaling (inputs in [0, 1/255]), which leads to vanishing gradients.
 train_datagen = ImageDataGenerator(
-    rescale=1./255,
     rotation_range=15,
     width_shift_range=0.1,
     height_shift_range=0.1,
@@ -144,7 +146,6 @@ train_datagen = ImageDataGenerator(
 )
 
 val_datagen = ImageDataGenerator(
-    rescale=1./255,
     validation_split=0.2
 )
 
@@ -168,7 +169,7 @@ val_generator = val_datagen.flow_from_directory(
     seed=SEED
 )
 
-test_datagen = ImageDataGenerator(rescale=1./255)
+test_datagen = ImageDataGenerator()
 
 test_generator = test_datagen.flow_from_directory(
     TEST_DIR,
@@ -447,7 +448,6 @@ for cls in classes:
 
         img = tf.keras.preprocessing.image.load_img(img_path, target_size=(224, 224))
         img_array = tf.keras.preprocessing.image.img_to_array(img)
-        img_array = img_array / 255.0
         img_array_expanded = np.expand_dims(img_array, axis=0)
 
         heatmap, pred_idx, probs = make_gradcam_heatmap(img_array_expanded, grad_cam_model)
@@ -496,3 +496,22 @@ print(f"  Input Size    : {IMG_SIZE}x{IMG_SIZE}")
 print(f"  Total Epochs  : Phase 1 ({phase1_epochs}) + Phase 2 ({phase2_epochs})")
 print("=" * 50)
 print("🧠 Brain Tumor Classification Complete!")
+
+# %% --- Cell 22: Convert Model to ONNX
+!pip install tf2onnx -q
+import tf2onnx
+import tensorflow as tf
+
+# Convert and save model to ONNX format
+spec = (tf.TensorSpec((None, 224, 224, 3), tf.float32, name="args_0"),)
+output_path = "brain_tumor_classifier.onnx"
+model_proto, _ = tf2onnx.convert.from_keras(model, input_signature=spec, opset=13, output_path=output_path)
+print(f"✅ Model successfully converted to ONNX and saved as: {output_path}")
+
+# Provide download links in Google Colab
+try:
+    from google.colab import files
+    print("Downloading ONNX model file to your local computer...")
+    files.download(output_path)
+except ImportError:
+    pass

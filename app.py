@@ -32,7 +32,9 @@ def predict(image):
 
     # Preprocess
     img = Image.fromarray(image).resize((224, 224))
-    img_array = np.array(img, dtype=np.float32) / 255.0
+    # Note: We do NOT divide by 255.0 because the ONNX model contains an internal 
+    # Rescaling layer that scales raw [0, 255] pixel values to [0, 1] internally.
+    img_array = np.array(img, dtype=np.float32)
     img_batch = np.expand_dims(img_array, axis=0)
 
     # Run ONNX inference
