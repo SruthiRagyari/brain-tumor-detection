@@ -1,5 +1,7 @@
 # 🧠 Brain Tumor Detection & Classification
 
+[![Live App Demo](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Space_Demo-purple?style=for-the-badge)](https://huggingface.co/spaces/Sruthi-R/brain-tumor-classifier)
+
 A deep learning project that classifies brain MRI scans into four categories using **EfficientNetB0** with transfer learning and fine-tuning. Built end-to-end in a single Jupyter notebook, fully runnable on Google Colab with GPU.
 
 ![Training Curves](training_curves.png)
