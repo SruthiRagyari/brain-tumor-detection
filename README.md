@@ -85,8 +85,7 @@ brain-tumor-detection/
 ├── sample_images.png             # Sample MRI images per class
 ├── training_curves.png           # Accuracy & loss curves
 └── model/
-    ├── brain_tumor_classifier.keras
-    └── brain_tumor_classifier.h5
+    └── brain_tumor_classifier.onnx   # Trained ONNX model (used for web app inference)
 ```
 
 ---
